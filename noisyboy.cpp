@@ -174,22 +174,63 @@ int score(Board &board)
 
     return score;
 }
+bool is_checkmate(Board &board) {
+    Movelist moves;
+    movegen::legalmoves(moves, board);
+    if (moves.size() == 0 && board.inCheck()) {
+        return true;
+    }
+    return false;
+}
 
 
-int negamax(Board &board)
+
+int negamax(Board &board, int alpha, int beta, int ply)
 {
-    int score = 0;
-    score += board.pieces(PieceType::PAWN,Color::WHITE).count() * 1;
-    score += board.pieces(PieceType::KNIGHT,Color::WHITE).count() * 3;
-    score += board.pieces(PieceType::BISHOP,Color::WHITE).count() * 3;
-    score += board.pieces(PieceType::ROOK,Color::WHITE).count() * 5;
-    score += board.pieces(PieceType::QUEEN,Color::WHITE).count() * 9;
+    if (ply ==0){
+        return score(board);
+    }
 
-    score -= board.pieces(PieceType::PAWN,Color::BLACK).count() * 1;
-    score -= board.pieces(PieceType::KNIGHT,Color::BLACK).count() * 3;
-    score -= board.pieces(PieceType::BISHOP,Color::BLACK).count() * 3;
-    score -= board.pieces(PieceType::ROOK,Color::BLACK).count() * 5;
-    score -= board.pieces(PieceType::QUEEN,Color::BLACK).count() * 9;
+    if (is_checkmate(board)) {
+        if (board.sideToMove() == Color::WHITE) {
+            return -10000 + ply;
+        } else {
+            return 10000 - ply;
+        }
+    }
+    if (board.isRepetition()) {
+        return 0;
+    }
+
+    int score = 0;
+    int best_value = -1000;
+
+    if (ply>=3 && !board.inCheck()){
+        board.makeNullMove();
+        score = -negamax(board, -beta, -beta+1, ply - 3);
+        board.unmakeNullMove();
+
+        if (score >= beta) {
+            return score;
+        }
+    };
+
+    Movelist moves;
+    movegen::legalmoves(moves, board); 
+    for (const auto& move : moves) {
+        board.makeMove(move);
+        score = -negamax(board, -beta, -alpha, ply - 1);
+        board.unmakeMove(move);
+        if (score >= beta) {
+            return score;
+        }
+        if (score > best_value) {
+            best_value = score;
+        }
+        if (score > alpha) {
+            alpha = score;
+        }
+    }
 
     return score;
 }
@@ -199,15 +240,30 @@ int negamax(Board &board)
 int main () {
     Board board = Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
+    int ply = 4;
+    int best_value = -1000;
+    Move best_move;
+    int alpha = -1000;
+    int beta = 1000;
+    int score = 0;
+
+
     Movelist moves;
     movegen::legalmoves(moves, board);
 
     for (const auto& move : moves) {
-        std::cout << move << " ";
+        board.makeMove(move);
+        score = -negamax(board, -beta, -alpha, ply - 1);
+        board.unmakeMove(move);
+
+
+        if (score > best_value) {
+            best_value = score;
+            best_move = move;
+        }
     }
-
-
-    std::cout << "Score: " << score(board) << std::endl;
+    std::cout << "Best move: " << best_move << std::endl;
+    std::cout << "Best value: " << best_value << std::endl;
 
     return 0;
 }
