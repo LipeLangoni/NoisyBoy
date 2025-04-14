@@ -145,14 +145,12 @@ int score(Board &board)
     score += board.pieces(PieceType::BISHOP,Color::WHITE).count() * 300;
     score += board.pieces(PieceType::ROOK,Color::WHITE).count() * 500;
     score += board.pieces(PieceType::QUEEN,Color::WHITE).count() * 900;
-    std::cout << "White score: " << score << std::endl;
 
     score -= board.pieces(PieceType::PAWN,Color::BLACK).count() * 100;
     score -= board.pieces(PieceType::KNIGHT,Color::BLACK).count() * 300;
     score -= board.pieces(PieceType::BISHOP,Color::BLACK).count() * 300;
     score -= board.pieces(PieceType::ROOK,Color::BLACK).count() * 500;
     score -= board.pieces(PieceType::QUEEN,Color::BLACK).count() * 900;
-    std::cout << "Black score: " << score << std::endl;
 
     score += PieceSquares(board.pieces(PieceType::PAWN, Color::BLACK), "p");
     score += PieceSquares(board.pieces(PieceType::KNIGHT, Color::BLACK), "n");
@@ -160,7 +158,7 @@ int score(Board &board)
     score += PieceSquares(board.pieces(PieceType::ROOK, Color::BLACK), "r");
     score += PieceSquares(board.pieces(PieceType::QUEEN, Color::BLACK), "q");
     score += PieceSquares(board.pieces(PieceType::KING, Color::BLACK), "k");
-    std::cout << "Black piece square score: " << score << std::endl;
+ 
 
     score -= PieceSquares(board.pieces(PieceType::PAWN, Color::WHITE), "P");
     score -= PieceSquares(board.pieces(PieceType::KNIGHT, Color::WHITE), "N");
@@ -168,9 +166,6 @@ int score(Board &board)
     score -= PieceSquares(board.pieces(PieceType::ROOK, Color::WHITE), "R");
     score -= PieceSquares(board.pieces(PieceType::QUEEN, Color::WHITE), "Q");
     score -= PieceSquares(board.pieces(PieceType::KING, Color::WHITE), "K");
-    std::cout << "White piece square score: " << score << std::endl;
-    
-    std::cout << "Score: " << score << std::endl;
 
     return score;
 }
@@ -235,11 +230,7 @@ int negamax(Board &board, int alpha, int beta, int ply)
     return score;
 }
 
-
-
-int main () {
-    Board board = Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-
+chess::Move noisy_boy(Board &board) {
     int ply = 4;
     int best_value = -1000;
     Move best_move;
@@ -262,8 +253,101 @@ int main () {
             best_move = move;
         }
     }
-    std::cout << "Best move: " << best_move << std::endl;
-    std::cout << "Best value: " << best_value << std::endl;
+    return best_move;
+}
 
+
+void uci_commands(Board &board, const std::string &message) {
+    std::string msg = message;
+
+    // msg.erase(0, msg.find_first_not_of(" \t\n\r"));
+    // msg.erase(msg.find_last_not_of(" \t\n\r") + 1);
+
+    std::istringstream iss(msg);
+    std::vector<std::string> tokens;
+    std::string token;
+    
+    while (iss >> token) {
+        tokens.push_back(token);
+    }
+
+    if (msg == "quit") {
+        std::exit(0);  
+    }
+
+    if (msg == "uci") {
+        std::cout << "id name NoisyBoy" << std::endl;
+        std::cout << "id author Felipe Langoni Ramos" << std::endl;
+        std::cout << "uciok" << std::endl;
+        return;
+    }
+
+    if (msg == "isready") {
+        std::cout << "readyok" << std::endl;
+        return;
+    }
+
+    if (msg == "ucinewgame") {
+        return;
+    }
+
+    if (msg == "setoption") {
+        return;
+    }
+
+    if (tokens[0] == "position") {
+        if (tokens.size() < 2) {
+            return;  
+        }
+
+        size_t moves_start = 0;
+
+        if (tokens[1] == "startpos") {
+   
+            board.setFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+            moves_start = 2;
+        } else if (tokens[1] == "fen") {
+            std::string fen = "";
+            for (size_t i = 2; i < 8; ++i) {
+                fen += tokens[i] + " ";
+            }
+        
+            board.setFen(fen);
+            moves_start = 8;
+        } else {
+            return;  
+        }
+
+        if (tokens.size() <= moves_start || tokens[moves_start] != "moves") {
+            return;  
+        }
+
+        for (size_t i = moves_start + 1; i < tokens.size(); ++i) {
+            std::string move_str = tokens[i];
+            Move move = uci::uciToMove(board,move_str);  
+            board.makeMove(move);  
+        }
+    }
+
+    if (msg == "d") {
+        std::cout << board << std::endl;
+        std::cout << board.getFen() << std::endl;
+    }
+
+    if (msg.substr(0, 2) == "go") {
+        Move best_move = noisy_boy(board);  
+        std::cout << "bestmove " << uci::moveToUci(best_move) << std::endl;  
+    }
+}
+
+
+int main() {
+    std::string input;
+    Board board = Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    while (true) {
+        std::getline(std::cin, input);
+        uci_commands(board,input);
+    }
+    
     return 0;
 }
