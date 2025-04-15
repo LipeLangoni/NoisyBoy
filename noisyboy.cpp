@@ -3,14 +3,12 @@
 #include <map>
 #include <vector>
 #include <unordered_map>
+#include <chrono>
 
 using namespace chess;
 
-std::vector<int> mirrorTable(const std::vector<int>& original) {
-    if (original.size() != 64) {
-        std::cerr << "mirrorTable() error: input vector size != 64\n";
-        return std::vector<int>(64, 0);
-    }
+inline std::vector<int> mirrorTable(const std::vector<int>& original) {
+    assert(original.size() == 64 && "mirrorTable() error: input vector size != 64");
     std::vector<int> mirrored(64);
     for (int row = 0; row < 8; ++row) {
         for (int col = 0; col < 8; ++col) {
@@ -108,15 +106,21 @@ struct PieceTable {
 };
 
 
-int PieceSquares(Bitboard piece, std::string type) {
+int PieceSquares(Bitboard piece, const std::string &type) {
     int score = 0;
- 
+    static const PieceTable pieceTable;
+    auto it = pieceTable.tables.find(type);
+    if (it == pieceTable.tables.end() || it->second.size() != 64) {
+        std::cerr << "Invalid piece type: " << type << "\n";
+        return score;
+    }
+    
+    const std::vector<int>& table = it->second;
     for (int square = 0; square < 64; ++square) {
         if ((piece >> square) & 1ULL) {
-            score += PieceTable().tables[type][square];
+            score += table[square];
         }
     }
-    std::cout << std::endl;
     return score;
 }
 
@@ -208,7 +212,7 @@ int negamax(Board &board, int alpha, int beta, int ply)
 }
 
 chess::Move noisy_boy(Board &board) {
-    int depth = 4;
+    int depth = 5;
     int best_value = -1000;
     Move best_move;
     int alpha = -1000;
@@ -341,8 +345,15 @@ void uci_commands(Board &board, const std::string &message) {
     }
 
     if (msg.substr(0, 2) == "go") {
+        auto start = std::chrono::high_resolution_clock::now();
         Move best_move = noisy_boy(board);  
-        std::cout << "bestmove " << uci::moveToUci(best_move) << std::endl;  
+        auto end = std::chrono::high_resolution_clock::now();
+        
+        // Calculate the duration in milliseconds
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+        
+        std::cout << "bestmove " << uci::moveToUci(best_move)
+                  << " (calc time " << duration << "s)" << std::endl;
     }
 }
 
