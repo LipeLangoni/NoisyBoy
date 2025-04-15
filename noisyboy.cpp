@@ -4,6 +4,8 @@
 #include <vector>
 #include <unordered_map>
 #include <chrono>
+#include <array>
+#include <string>
 
 using namespace chess;
 
@@ -124,35 +126,36 @@ int PieceSquares(Bitboard piece, const std::string &type) {
     return score;
 }
 
-int score(Board &board)
-{
+struct PieceInfo {
+    chess::PieceType type;
+    int materialValue;
+    const char* whiteKey;  
+    const char* blackKey;
+};
+
+static constexpr std::array<PieceInfo, 5> pieceInfos{{
+    { chess::PieceType::PAWN,   100, "P", "p" },
+    { chess::PieceType::KNIGHT, 300, "N", "n" },
+    { chess::PieceType::BISHOP, 300, "B", "b" },
+    { chess::PieceType::ROOK,   500, "R", "r" },
+    { chess::PieceType::QUEEN,  900, "Q", "q" }
+}};
+
+int score(Board &board) {
     int score = 0;
-    score += board.pieces(PieceType::PAWN,Color::WHITE).count() * 100;
-    score += board.pieces(PieceType::KNIGHT,Color::WHITE).count() * 300;
-    score += board.pieces(PieceType::BISHOP,Color::WHITE).count() * 300;
-    score += board.pieces(PieceType::ROOK,Color::WHITE).count() * 500;
-    score += board.pieces(PieceType::QUEEN,Color::WHITE).count() * 900;
 
-    score -= board.pieces(PieceType::PAWN,Color::BLACK).count() * 100;
-    score -= board.pieces(PieceType::KNIGHT,Color::BLACK).count() * 300;
-    score -= board.pieces(PieceType::BISHOP,Color::BLACK).count() * 300;
-    score -= board.pieces(PieceType::ROOK,Color::BLACK).count() * 500;
-    score -= board.pieces(PieceType::QUEEN,Color::BLACK).count() * 900;
+    for (const auto &info : pieceInfos) {
 
-    score += PieceSquares(board.pieces(PieceType::PAWN, Color::BLACK), "p");
-    score += PieceSquares(board.pieces(PieceType::KNIGHT, Color::BLACK), "n");
-    score += PieceSquares(board.pieces(PieceType::BISHOP, Color::BLACK), "b");
-    score += PieceSquares(board.pieces(PieceType::ROOK, Color::BLACK), "r");
-    score += PieceSquares(board.pieces(PieceType::QUEEN, Color::BLACK), "q");
-    score += PieceSquares(board.pieces(PieceType::KING, Color::BLACK), "k");
- 
+        int whiteCount = board.pieces(info.type, Color::WHITE).count();
+        int blackCount = board.pieces(info.type, Color::BLACK).count();
+        score += whiteCount * info.materialValue;
+        score -= blackCount * info.materialValue;
+        score -= PieceSquares(board.pieces(info.type, Color::WHITE), info.whiteKey);
+        score += PieceSquares(board.pieces(info.type, Color::BLACK), info.blackKey);
+    }
 
-    score -= PieceSquares(board.pieces(PieceType::PAWN, Color::WHITE), "P");
-    score -= PieceSquares(board.pieces(PieceType::KNIGHT, Color::WHITE), "N");
-    score -= PieceSquares(board.pieces(PieceType::BISHOP, Color::WHITE), "B");
-    score -= PieceSquares(board.pieces(PieceType::ROOK, Color::WHITE), "R");
-    score -= PieceSquares(board.pieces(PieceType::QUEEN, Color::WHITE), "Q");
     score -= PieceSquares(board.pieces(PieceType::KING, Color::WHITE), "K");
+    score += PieceSquares(board.pieces(PieceType::KING, Color::BLACK), "k");
 
     return score;
 }
