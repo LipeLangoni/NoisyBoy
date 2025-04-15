@@ -107,23 +107,6 @@ struct PieceTable {
     }
 };
 
-int pst_score(Board &board)
-{
-    int score = 0;
-    score += board.pieces(PieceType::PAWN,Color::WHITE).count() * 1;
-    score += board.pieces(PieceType::KNIGHT,Color::WHITE).count() * 3;
-    score += board.pieces(PieceType::BISHOP,Color::WHITE).count() * 3;
-    score += board.pieces(PieceType::ROOK,Color::WHITE).count() * 5;
-    score += board.pieces(PieceType::QUEEN,Color::WHITE).count() * 9;
-
-    score -= board.pieces(PieceType::PAWN,Color::BLACK).count() * 1;
-    score -= board.pieces(PieceType::KNIGHT,Color::BLACK).count() * 3;
-    score -= board.pieces(PieceType::BISHOP,Color::BLACK).count() * 3;
-    score -= board.pieces(PieceType::ROOK,Color::BLACK).count() * 5;
-    score -= board.pieces(PieceType::QUEEN,Color::BLACK).count() * 9;
-
-    return score;
-}
 
 int PieceSquares(Bitboard piece, std::string type) {
     int score = 0;
@@ -169,30 +152,25 @@ int score(Board &board)
 
     return score;
 }
-bool is_checkmate(Board &board) {
-    Movelist moves;
-    movegen::legalmoves(moves, board);
-    if (moves.size() == 0 && board.inCheck()) {
-        return true;
-    }
-    return false;
-}
 
 
 
 int negamax(Board &board, int alpha, int beta, int ply)
 {
+    Movelist moves;
+    movegen::legalmoves(moves, board); 
+    if (moves.size() == 0) {
+        if (board.inCheck()) {
+            return -10000 + ply;
+        } else {
+            return 0;
+        }
+    }
+
     if (ply ==0){
         return score(board);
     }
 
-    if (is_checkmate(board)) {
-        if (board.sideToMove() == Color::WHITE) {
-            return -10000 + ply;
-        } else {
-            return 10000 - ply;
-        }
-    }
     if (board.isRepetition()) {
         return 0;
     }
@@ -210,14 +188,13 @@ int negamax(Board &board, int alpha, int beta, int ply)
         }
     };
 
-    Movelist moves;
-    movegen::legalmoves(moves, board); 
+    
     for (const auto& move : moves) {
         board.makeMove(move);
         score = -negamax(board, -beta, -alpha, ply - 1);
         board.unmakeMove(move);
         if (score >= beta) {
-            return score;
+            return beta;
         }
         if (score > best_value) {
             best_value = score;
@@ -231,7 +208,7 @@ int negamax(Board &board, int alpha, int beta, int ply)
 }
 
 chess::Move noisy_boy(Board &board) {
-    int ply = 4;
+    int depth = 4;
     int best_value = -1000;
     Move best_move;
     int alpha = -1000;
@@ -241,19 +218,48 @@ chess::Move noisy_boy(Board &board) {
 
     Movelist moves;
     movegen::legalmoves(moves, board);
+    std::unordered_map<int, std::vector<std::tuple<chess::Move, int>>> pv_table;
 
-    for (const auto& move : moves) {
-        board.makeMove(move);
-        score = -negamax(board, -beta, -alpha, ply - 1);
-        board.unmakeMove(move);
+    for (int ply = 1; ply <= depth; ++ply) {
+        std::vector<std::tuple<Move, int>> sorted_moves;
+        if (ply == 1) {
+            for (const auto& move : moves) {
+                board.makeMove(move);
+                score = -negamax(board, -beta, -alpha, ply - 1);
+                board.unmakeMove(move);
 
+                if (score > best_value) {
+                    best_value = score;
+                    best_move = move;
+                }
+                sorted_moves.emplace_back(move, score);
+            }
+            std::sort(sorted_moves.begin(), sorted_moves.end(),
+            [](const std::tuple<Move, int>& a, const std::tuple<Move, int>& b) {
+                return std::get<1>(a) > std::get<1>(b);
+            });
+            pv_table[ply] = sorted_moves;
+        } else {
+            for (auto& move_tuple : pv_table[ply-1]) {
+                board.makeMove(std::get<0>(move_tuple));
+                score = -negamax(board, -beta, -alpha, ply - 1);
+                board.unmakeMove(std::get<0>(move_tuple));
 
-        if (score > best_value) {
-            best_value = score;
-            best_move = move;
+                if (score > best_value) {
+                    best_value = score;
+                    best_move = std::get<0>(move_tuple);
+                }
+                sorted_moves.emplace_back(std::get<0>(move_tuple), score);
+            }
+            std::sort(sorted_moves.begin(), sorted_moves.end(),
+            [](const std::tuple<Move, int>& a, const std::tuple<Move, int>& b) {
+                return std::get<1>(a) > std::get<1>(b);
+            });
+            pv_table[ply] = sorted_moves;
+            
         }
     }
-    return best_move;
+    return std::get<0>(pv_table[depth].front());
 }
 
 
