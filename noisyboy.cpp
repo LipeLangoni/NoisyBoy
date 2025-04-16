@@ -145,19 +145,25 @@ int score(Board &board) {
     int score = 0;
 
     for (const auto &info : pieceInfos) {
-
         int whiteCount = board.pieces(info.type, Color::WHITE).count();
         int blackCount = board.pieces(info.type, Color::BLACK).count();
+        std::cout << ", Score: " << score << std::endl;
         score += whiteCount * info.materialValue;
+        std::cout << ", Score material+W: " << score << std::endl;
         score -= blackCount * info.materialValue;
-        score -= PieceSquares(board.pieces(info.type, Color::WHITE), info.whiteKey);
-        score += PieceSquares(board.pieces(info.type, Color::BLACK), info.blackKey);
+        std::cout << ", Score material+B: " << score << std::endl;
+        score += PieceSquares(board.pieces(info.type, Color::WHITE), info.whiteKey);
+        std::cout << ", Score pstW: " << score << std::endl;
+        score -= PieceSquares(board.pieces(info.type, Color::BLACK), info.blackKey);
+        std::cout << ", Score pstB: " << score << std::endl;
+
     }
 
     score -= PieceSquares(board.pieces(PieceType::KING, Color::WHITE), "K");
     score += PieceSquares(board.pieces(PieceType::KING, Color::BLACK), "k");
 
-    return score;
+    int who = (board.sideToMove() == Color::WHITE) ? 1 : -1;
+    return score * who;
 }
 
 
@@ -215,7 +221,7 @@ int negamax(Board &board, int alpha, int beta, int ply)
 }
 
 chess::Move noisy_boy(Board &board) {
-    int depth = 5;
+    int depth = 3;
     int best_value = -1000;
     Move best_move;
     int alpha = -1000;
@@ -266,6 +272,14 @@ chess::Move noisy_boy(Board &board) {
             
         }
     }
+    for (const auto& [depth, moves] : pv_table) {
+    std::cout << "Depth " << depth << ":\n";
+    for (const auto& [move, score] : moves) {
+        std::cout << "  Move: " << uci::moveToUci(move) << ", Score: " << score << '\n';
+    }
+}
+
+
     return std::get<0>(pv_table[depth].front());
 }
 
@@ -358,6 +372,28 @@ void uci_commands(Board &board, const std::string &message) {
         std::cout << "bestmove " << uci::moveToUci(best_move)
                   << " (calc time " << duration << "s)" << std::endl;
     }
+    if (msg.substr(0, 4) == "eval") {
+        auto start = std::chrono::high_resolution_clock::now();
+        int s = score(board);  
+        auto end = std::chrono::high_resolution_clock::now();
+        
+        // Calculate the duration in milliseconds
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+        
+        std::cout << "score: " << s
+                  << " (calc time " << duration << "s)" << std::endl;
+    }
+    if (msg.substr(0, 4) == "side") {
+        auto start = std::chrono::high_resolution_clock::now();
+        int s = board.sideToMove();  
+        auto end = std::chrono::high_resolution_clock::now();
+        
+        // Calculate the duration in milliseconds
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+        
+        std::cout << "side: " << s
+                  << " (calc time " << duration << "s)" << std::endl;
+    }
 }
 
 
@@ -371,3 +407,4 @@ int main() {
     
     return 0;
 }
+
