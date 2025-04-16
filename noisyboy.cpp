@@ -134,11 +134,11 @@ struct PieceInfo {
 };
 
 static constexpr std::array<PieceInfo, 5> pieceInfos{{
-    { chess::PieceType::PAWN,   100, "P", "p" },
-    { chess::PieceType::KNIGHT, 300, "N", "n" },
-    { chess::PieceType::BISHOP, 300, "B", "b" },
-    { chess::PieceType::ROOK,   500, "R", "r" },
-    { chess::PieceType::QUEEN,  900, "Q", "q" }
+    { chess::PieceType::PAWN,   100, "p", "P" },
+    { chess::PieceType::KNIGHT, 300, "n", "N" },
+    { chess::PieceType::BISHOP, 300, "b", "B" },
+    { chess::PieceType::ROOK,   500, "r", "R" },
+    { chess::PieceType::QUEEN,  900, "q", "Q" }
 }};
 
 int score(Board &board) {
@@ -147,20 +147,16 @@ int score(Board &board) {
     for (const auto &info : pieceInfos) {
         int whiteCount = board.pieces(info.type, Color::WHITE).count();
         int blackCount = board.pieces(info.type, Color::BLACK).count();
-        std::cout << ", Score: " << score << std::endl;
         score += whiteCount * info.materialValue;
-        std::cout << ", Score material+W: " << score << std::endl;
         score -= blackCount * info.materialValue;
-        std::cout << ", Score material+B: " << score << std::endl;
         score += PieceSquares(board.pieces(info.type, Color::WHITE), info.whiteKey);
-        std::cout << ", Score pstW: " << score << std::endl;
         score -= PieceSquares(board.pieces(info.type, Color::BLACK), info.blackKey);
-        std::cout << ", Score pstB: " << score << std::endl;
+
 
     }
 
-    score -= PieceSquares(board.pieces(PieceType::KING, Color::WHITE), "K");
-    score += PieceSquares(board.pieces(PieceType::KING, Color::BLACK), "k");
+    score += PieceSquares(board.pieces(PieceType::KING, Color::WHITE), "k");
+    score -= PieceSquares(board.pieces(PieceType::KING, Color::BLACK), "K");
 
     int who = (board.sideToMove() == Color::WHITE) ? 1 : -1;
     return score * who;
@@ -272,12 +268,6 @@ chess::Move noisy_boy(Board &board) {
             
         }
     }
-    for (const auto& [depth, moves] : pv_table) {
-    std::cout << "Depth " << depth << ":\n";
-    for (const auto& [move, score] : moves) {
-        std::cout << "  Move: " << uci::moveToUci(move) << ", Score: " << score << '\n';
-    }
-}
 
 
     return std::get<0>(pv_table[depth].front());
