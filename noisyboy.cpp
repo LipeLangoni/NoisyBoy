@@ -8,7 +8,7 @@
 #include <string>
 
 using namespace chess;
-
+const int MAX_DEPTH = 10;
 inline std::vector<int> mirrorTable(const std::vector<int>& original) {
     assert(original.size() == 64 && "mirrorTable() error: input vector size != 64");
     std::vector<int> mirrored(64);
@@ -162,12 +162,78 @@ int score(Board &board) {
     return score * who;
 }
 
-
-
-int negamax(Board &board, int alpha, int beta, int ply)
+int quisce(Board &board, int alpha, int beta, int ply,std::chrono::time_point<std::chrono::high_resolution_clock>start_time,std::chrono::milliseconds max_time)
 {
+    auto current_time = std::chrono::high_resolution_clock::now();
+    if (std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count() > max_time.count() || ply >= MAX_DEPTH) {
+        std::cout << "Quisce Time out" << std::endl;
+        return 0;
+    }
+
     Movelist moves;
     movegen::legalmoves(moves, board); 
+
+    if (ply ==0){
+        return score(board);
+    }
+
+    if (board.isRepetition()) {
+        return 0;
+    }
+
+    int stand_pat = score(board);
+    if (stand_pat >= beta) {
+        return beta;
+    }
+    if (stand_pat > alpha) {
+        alpha = stand_pat;
+    }
+
+    int delta = 1000;
+    int score = 0;
+    int best_value = stand_pat;
+
+    
+    for (const auto& move : moves) {
+        // if (move.PROMOTION) {
+        //     delta+=750;
+        // }
+        if (board.isCapture(move)) {
+            board.makeMove(move);
+        score = -quisce(board, -beta, -alpha, ply - 1,start_time,max_time);
+        board.unmakeMove(move);
+        if (score >= beta) {
+            return score;
+        }
+        // if (stand_pat < alpha-delta) {
+        //     return alpha;
+        // }
+        if( score > best_value ){
+            best_value = score;}
+
+        if (score > alpha) {
+            alpha = score;
+        }
+        }
+        
+        
+    }
+
+    return best_value;
+}
+
+int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<std::chrono::high_resolution_clock>start_time,std::chrono::milliseconds max_time)
+{
+    
+    auto current_time = std::chrono::high_resolution_clock::now();
+    std::cout << " (Duration negamax " << std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() << "s)" << std::endl;
+    if (std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count() > max_time.count()) {
+        std::cout << "Negamax Time out" << std::endl;
+        return 0;
+    }
+    Movelist moves;
+    movegen::legalmoves(moves, board); 
+    
     if (moves.size() == 0) {
         if (board.inCheck()) {
             return -10000 + ply;
@@ -177,7 +243,7 @@ int negamax(Board &board, int alpha, int beta, int ply)
     }
 
     if (ply ==0){
-        return score(board);
+        return quisce(board, alpha, beta, ply,start_time,max_time);
     }
 
     if (board.isRepetition()) {
@@ -189,7 +255,7 @@ int negamax(Board &board, int alpha, int beta, int ply)
 
     if (ply>=3 && !board.inCheck()){
         board.makeNullMove();
-        score = -negamax(board, -beta, -beta+1, ply - 3);
+        score = -negamax(board, -beta, -beta+1, ply - 3,start_time,max_time);
         board.unmakeNullMove();
 
         if (score >= beta) {
@@ -200,7 +266,7 @@ int negamax(Board &board, int alpha, int beta, int ply)
     
     for (const auto& move : moves) {
         board.makeMove(move);
-        score = -negamax(board, -beta, -alpha, ply - 1);
+        score = -negamax(board, -beta, -alpha, ply - 1,start_time,max_time);
         board.unmakeMove(move);
         if (score >= beta) {
             return beta;
@@ -216,69 +282,87 @@ int negamax(Board &board, int alpha, int beta, int ply)
     return score;
 }
 
-chess::Move noisy_boy(Board &board) {
-    int depth = 3;
+chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, int binc = 0) {
+    
     int best_value = -1000;
-    Move best_move;
-    int alpha = -1000;
-    int beta = 1000;
-    int score = 0;
+    chess::Move best_move;
+    int alpha = -1000, beta = +1000;
+  
+    Movelist root_moves;
+    movegen::legalmoves(root_moves, board);
+  
+    std::vector<std::vector<std::tuple<Move,int>>> pv_table(MAX_DEPTH+1);
+  
+    std::vector<std::tuple<Move,int>> sorted_moves;
+    sorted_moves.reserve(root_moves.size());
+    std::cout << "wtime " << wtime << "ms" << std::endl;
 
-
-    Movelist moves;
-    movegen::legalmoves(moves, board);
-    std::unordered_map<int, std::vector<std::tuple<chess::Move, int>>> pv_table;
-
-    for (int ply = 1; ply <= depth; ++ply) {
-        std::vector<std::tuple<Move, int>> sorted_moves;
-        if (ply == 1) {
-            for (const auto& move : moves) {
-                board.makeMove(move);
-                score = -negamax(board, -beta, -alpha, ply - 1);
-                board.unmakeMove(move);
-
-                if (score > best_value) {
-                    best_value = score;
-                    best_move = move;
-                }
-                sorted_moves.emplace_back(move, score);
-            }
-            std::sort(sorted_moves.begin(), sorted_moves.end(),
-            [](const std::tuple<Move, int>& a, const std::tuple<Move, int>& b) {
-                return std::get<1>(a) > std::get<1>(b);
-            });
-            pv_table[ply] = sorted_moves;
-        } else {
-            for (auto& move_tuple : pv_table[ply-1]) {
-                board.makeMove(std::get<0>(move_tuple));
-                score = -negamax(board, -beta, -alpha, ply - 1);
-                board.unmakeMove(std::get<0>(move_tuple));
-
-                if (score > best_value) {
-                    best_value = score;
-                    best_move = std::get<0>(move_tuple);
-                }
-                sorted_moves.emplace_back(std::get<0>(move_tuple), score);
-            }
-            std::sort(sorted_moves.begin(), sorted_moves.end(),
-            [](const std::tuple<Move, int>& a, const std::tuple<Move, int>& b) {
-                return std::get<1>(a) > std::get<1>(b);
-            });
-            pv_table[ply] = sorted_moves;
-            
+    std::chrono::milliseconds max_time = std::chrono::milliseconds(wtime)/40;
+    auto start = std::chrono::high_resolution_clock::now();
+  
+    for (int ply = 1; ply <= MAX_DEPTH; ++ply) {
+        auto current_time = std::chrono::high_resolution_clock::now();
+        std::cout << "Maxtime " << max_time.count() << "ms" << std::endl;
+        std::cout << "Ply " << ply << " (Depth " << ply << ")" << std::endl;
+        std::cout << " (Duration " << std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start).count() << "s)" << std::endl;
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start).count() > max_time.count()) {
+            return std::get<0>(pv_table[ply-1].front());
         }
+        sorted_moves.clear();
+    
+        if (ply == 1) {
+            for (const Move &move : root_moves) {
+            board.makeMove(move);
+            int score = -negamax(board, -beta, -alpha, ply-1,start,max_time);
+            board.unmakeMove(move);
+    
+            if (score > best_value) {
+                best_value = score;
+                best_move  = move;
+            }
+            sorted_moves.emplace_back(move, score);
+    
+            if (score > alpha) {
+                alpha = score;
+                if (alpha >= beta) break;
+            }
+            }
+        }
+        else {
+            for (auto &entry : pv_table[ply-1]) {
+            Move move    = std::get<0>(entry);
+            board.makeMove(move);
+            int score = -negamax(board, -beta, -alpha, ply-1,start,max_time);
+            board.unmakeMove(move);
+    
+            if (score > best_value) {
+                best_value = score;
+                best_move  = move;
+            }
+            sorted_moves.emplace_back(move, score);
+    
+            if (score > alpha) {
+                alpha = score;
+                if (alpha >= beta) break;
+            }
+            }
+      }
+  
+      std::sort(sorted_moves.begin(), sorted_moves.end(),
+                [](auto &a, auto &b){
+                  return std::get<1>(a) > std::get<1>(b);
+                });
+  
+      pv_table[ply] = sorted_moves;
     }
-
-
-    return std::get<0>(pv_table[depth].front());
-}
-
+  
+    return std::get<0>(pv_table[MAX_DEPTH].front());
+  }
+  
+  
 
 void uci_commands(Board &board, const std::string &message) {
     std::string msg = message;
-
-    // msg.erase(0, msg.find_first_not_of(" \t\n\r"));
-    // msg.erase(msg.find_last_not_of(" \t\n\r") + 1);
 
     std::istringstream iss(msg);
     std::vector<std::string> tokens;
@@ -352,11 +436,34 @@ void uci_commands(Board &board, const std::string &message) {
     }
 
     if (msg.substr(0, 2) == "go") {
+
+        std::unordered_map<std::string, int> params = {
+            {"wtime", 300000},
+            {"btime", 300000},
+            {"winc", 0},
+            {"binc", 0}
+        };
+        
+        std::istringstream iss(msg); 
+        std::string token;
+        
+        for (size_t i = 0; i < 4; ++i) {
+            iss >> token;
+            if (token == "wtime") {
+                iss >> params["wtime"];
+            } else if (token == "btime") {
+                iss >> params["btime"];
+            } else if (token == "winc") {
+                iss >> params["winc"];
+            } else if (token == "binc") {
+                iss >> params["binc"];
+            }
+        }
         auto start = std::chrono::high_resolution_clock::now();
-        Move best_move = noisy_boy(board);  
+        Move best_move = noisy_boy(board, params["wtime"], params["btime"],
+                                   params["winc"], params["binc"]);  
         auto end = std::chrono::high_resolution_clock::now();
         
-        // Calculate the duration in milliseconds
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
         
         std::cout << "bestmove " << uci::moveToUci(best_move)
@@ -367,7 +474,6 @@ void uci_commands(Board &board, const std::string &message) {
         int s = score(board);  
         auto end = std::chrono::high_resolution_clock::now();
         
-        // Calculate the duration in milliseconds
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
         
         std::cout << "score: " << s
@@ -378,7 +484,6 @@ void uci_commands(Board &board, const std::string &message) {
         int s = board.sideToMove();  
         auto end = std::chrono::high_resolution_clock::now();
         
-        // Calculate the duration in milliseconds
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
         
         std::cout << "side: " << s
