@@ -250,7 +250,7 @@ int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<s
     //     return quisce(board, alpha, beta, ply,start_time,max_time);
     // }
     if (ply == 0){
-        return score(board);
+        return quisce(board, alpha, beta, ply,start_time,max_time);
     }
 
     if (board.isRepetition()) {
@@ -313,7 +313,7 @@ chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, i
         if (ply == 1) {
             for (const auto& move : moves) {
                 board.makeMove(move);
-                score = -negamax(board, -beta, -alpha, ply - 1,start,max_time);
+                score = negamax(board, alpha, beta, ply,start,max_time);
                 board.unmakeMove(move);
 
                 if (score > best_value) {
@@ -351,85 +351,6 @@ chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, i
 
     return std::get<0>(pv_table[depth].front());
 }
-
-// chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, int binc = 0) {
-    
-//     chess::Move best_move;
-   
-  
-//     Movelist root_moves;
-//     movegen::legalmoves(root_moves, board);
-  
-//     std::vector<std::vector<std::tuple<Move,int>>> pv_table(MAX_DEPTH+1);
-  
-//     std::vector<std::tuple<Move,int>> sorted_moves;
-//     sorted_moves.reserve(root_moves.size());
-
-//     std::chrono::milliseconds max_time = std::chrono::milliseconds(wtime)/40;
-//     auto start = std::chrono::high_resolution_clock::now();
-  
-//     for (int ply = 1; ply <= MAX_DEPTH; ++ply) {
-//         int best_value = -1000, alpha = -1000, beta = +1000;
-//         auto current_time = std::chrono::high_resolution_clock::now();
-//         if (std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start).count() > max_time.count()) {
-//             return std::get<0>(pv_table[ply-1].front());
-//         }
-//         sorted_moves.clear();
-//         try {if (ply == 1) {
-//             for (const Move &move : root_moves) {
-//             board.makeMove(move);
-//             int score = -negamax(board, -beta, -alpha, ply-1,start,max_time);
-//             board.unmakeMove(move);
-    
-//             if (score > best_value) {
-//                 best_value = score;
-//                 best_move  = move;
-//             }
-//             sorted_moves.emplace_back(move, score);
-    
-//             if (score > alpha) {
-//                 alpha = score;
-//                 if (alpha >= beta) break;
-//             }
-//             }
-//         }
-//         else {
-//             for (auto &entry : pv_table[ply-1]) {
-//             Move move    = std::get<0>(entry);
-//             board.makeMove(move);
-//             int score = -negamax(board, -beta, -alpha, ply-1,start,max_time);
-//             board.unmakeMove(move);
-    
-//             if (score > best_value) {
-//                 best_value = score;
-//                 best_move  = move;
-//             }
-//             sorted_moves.emplace_back(move, score);
-    
-//             if (score > alpha) {
-//                 alpha = score;
-//                 if (alpha >= beta) break;
-//             }
-//             }
-            
-//       }
-//       std::sort(sorted_moves.begin(), sorted_moves.end(),
-//       [](auto &a, auto &b){
-//         return std::get<1>(a) > std::get<1>(b);
-//       });
-//       pv_table[ply] = sorted_moves;
-//       best_move     = std::get<0>(sorted_moves.front());
-    
-//     }
-//     catch (const SearchTimeoutException&) {
-//         break;
-//       }
-  
-//     }
-  
-//     return best_move;
-//   }
-  
   
 
 void uci_commands(Board &board, const std::string &message) {
