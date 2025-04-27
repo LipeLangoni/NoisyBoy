@@ -288,17 +288,12 @@ int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<s
         }
     }
 
-    return score;
+    return best_value;
 }
 chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, int binc = 0) {
-    int depth = 3;
-    int best_value = -1000;
+    
     Move best_move;
-    int alpha = -1000;
-    int beta = 1000;
-    int score = 0;
-
-
+    
     Movelist moves;
     movegen::legalmoves(moves, board);
     std::unordered_map<int, std::vector<std::tuple<chess::Move, int>>> pv_table;
@@ -311,10 +306,15 @@ chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, i
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int ply = 1; ply <= MAX_DEPTH; ++ply) {
+        int alpha = -1000;
+        int beta = 1000;
+        int score = 0;
+        int best_value = -1000;
+
         lastDepth = ply;
         auto current_time = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start).count() > max_time.count()) {
-            return std::get<0>(pv_table[ply-1].front());
+            return best_move;
         }
         std::vector<std::tuple<Move, int>> sorted_moves;
         if (ply == 1) {
@@ -356,7 +356,7 @@ chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, i
     }
 
 
-    return std::get<0>(pv_table[5].front());
+    return best_move;
 }
   
 
