@@ -169,63 +169,46 @@ struct SearchTimeoutException : public std::exception {
     }
 };
 
-int quisce(Board &board, int alpha, int beta, int ply,std::chrono::time_point<std::chrono::high_resolution_clock>start_time,std::chrono::milliseconds max_time)
-{
-    auto current_time = std::chrono::high_resolution_clock::now();
-    if (current_time - start_time > max_time) {
+int quisce(Board &board, int alpha, int beta, 
+    std::chrono::time_point<std::chrono::high_resolution_clock> start_time,
+    std::chrono::milliseconds max_time)
+        {
+        auto current_time = std::chrono::high_resolution_clock::now();
+        if (current_time - start_time > max_time) {
         return 0;
-    }
+        }
 
-    Movelist moves;
-    movegen::legalmoves(moves, board); 
-
-    if (ply ==0){
-        return score(board);
-    }
-
-    if (board.isRepetition()) {
+        if (board.isRepetition()) {
         return 0;
-    }
+        }
 
-    int stand_pat = score(board);
-    if (stand_pat >= beta) {
+        int stand_pat = score(board);
+        if (stand_pat >= beta) {
         return beta;
-    }
-    if (stand_pat > alpha) {
+        }
+        if (stand_pat > alpha) {
         alpha = stand_pat;
-    }
+        }
 
-    int delta = 1000;
-    int score = 0;
-    int best_value = stand_pat;
+        Movelist moves;
+        movegen::legalmoves(moves, board);
 
-    
-    for (const auto& move : moves) {
-        // if (move.PROMOTION) {
-        //     delta+=750;
-        // }
+        for (const auto& move : moves) {
         if (board.isCapture(move)) {
             board.makeMove(move);
-        score = -quisce(board, -beta, -alpha, ply - 1,start_time,max_time);
-        board.unmakeMove(move);
-        if (score >= beta) {
-            return score;
-        }
-        // if (stand_pat < alpha-delta) {
-        //     return alpha;
-        // }
-        if( score > best_value ){
-            best_value = score;}
+            int score = -quisce(board, -beta, -alpha, start_time, max_time);
+            board.unmakeMove(move);
 
-        if (score > alpha) {
-            alpha = score;
+            if (score >= beta) {
+                return beta;
+            }
+            if (score > alpha) {
+                alpha = score;
+            }
         }
         }
-        
-        
-    }
 
-    return best_value;
+        return alpha;
 }
 
 
@@ -235,6 +218,13 @@ int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<s
     
     auto now = std::chrono::high_resolution_clock::now();
     if (now - start_time > max_time) {
+        return 0;
+    }
+    if (ply == 0){
+        return quisce(board, alpha, beta,start_time,max_time);
+    }
+
+    if (board.isRepetition()) {
         return 0;
     }
     Movelist moves;
@@ -251,13 +241,7 @@ int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<s
     // if (ply ==0){
     //     return quisce(board, alpha, beta, ply,start_time,max_time);
     // }
-    if (ply == 0){
-        return quisce(board, alpha, beta, ply,start_time,max_time);
-    }
-
-    if (board.isRepetition()) {
-        return 0;
-    }
+    
 
     int score = 0;
     int best_value = -1000;
