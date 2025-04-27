@@ -141,25 +141,27 @@ static constexpr std::array<PieceInfo, 5> pieceInfos{{
     { chess::PieceType::QUEEN,  900, "q", "Q" }
 }};
 
+inline const char* getKey(const PieceInfo &info, Color side) {
+    return (side == Color::WHITE) ? info.whiteKey : info.blackKey;
+}
+
 int score(Board &board) {
     int score = 0;
-
+    Color us = board.sideToMove();
+    Color them = ~us;
     for (const auto &info : pieceInfos) {
-        int whiteCount = board.pieces(info.type, Color::WHITE).count();
-        int blackCount = board.pieces(info.type, Color::BLACK).count();
-        score += whiteCount * info.materialValue;
-        score -= blackCount * info.materialValue;
-        score += PieceSquares(board.pieces(info.type, Color::WHITE), info.whiteKey);
-        score -= PieceSquares(board.pieces(info.type, Color::BLACK), info.blackKey);
-
-
+        int sideCount = board.pieces(info.type, us).count();
+        int opponentCount = board.pieces(info.type, them).count();
+        score += sideCount * info.materialValue;
+        score -= opponentCount * info.materialValue;
+        score += PieceSquares(board.pieces(info.type, us), getKey(info, us));
+        score -= PieceSquares(board.pieces(info.type, them), getKey(info, them));
     }
 
-    score += PieceSquares(board.pieces(PieceType::KING, Color::WHITE), "k");
-    score -= PieceSquares(board.pieces(PieceType::KING, Color::BLACK), "K");
+    score += PieceSquares(board.pieces(PieceType::KING, us), us == Color::WHITE ? "k" : "K");
+    score -= PieceSquares(board.pieces(PieceType::KING, them), them == Color::WHITE ? "k" : "K");
 
-    int who = (board.sideToMove() == Color::WHITE) ? 1 : -1;
-    return score * who;
+    return score;
 }
 struct SearchTimeoutException : public std::exception {
     const char* what() const noexcept override {
@@ -301,10 +303,15 @@ chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, i
     movegen::legalmoves(moves, board);
     std::unordered_map<int, std::vector<std::tuple<chess::Move, int>>> pv_table;
 
-    std::chrono::milliseconds max_time = std::chrono::milliseconds(wtime)/40;
+    auto tms = (board.sideToMove()==Color::WHITE ? wtime : btime);
+    auto inc = (board.sideToMove()==Color::WHITE ? winc  : binc);
+    std::chrono::milliseconds max_time = 
+    std::chrono::milliseconds(tms / 40) + std::chrono::milliseconds(inc / 2);
+    int lastDepth = 0;
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int ply = 1; ply <= MAX_DEPTH; ++ply) {
+        lastDepth = ply;
         auto current_time = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start).count() > max_time.count()) {
             return std::get<0>(pv_table[ply-1].front());
@@ -313,7 +320,7 @@ chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, i
         if (ply == 1) {
             for (const auto& move : moves) {
                 board.makeMove(move);
-                score = negamax(board, alpha, beta, ply,start,max_time);
+                score = -negamax(board, -beta, -alpha, ply - 1,start,max_time);
                 board.unmakeMove(move);
 
                 if (score > best_value) {
@@ -349,7 +356,7 @@ chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, i
     }
 
 
-    return std::get<0>(pv_table[depth].front());
+    return std::get<0>(pv_table[5].front());
 }
   
 
