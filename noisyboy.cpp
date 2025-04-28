@@ -163,53 +163,54 @@ int score(Board &board) {
 
     return score;
 }
-struct SearchTimeoutException : public std::exception {
-    const char* what() const noexcept override {
-        return "Search timeout";
-    }
-};
 
 int quisce(Board &board, int alpha, int beta, 
     std::chrono::time_point<std::chrono::high_resolution_clock> start_time,
     std::chrono::milliseconds max_time)
-        {
-        auto current_time = std::chrono::high_resolution_clock::now();
-        if (current_time - start_time > max_time) {
+{
+    auto current_time = std::chrono::high_resolution_clock::now();
+    if (current_time - start_time > max_time) {
         return 0;
-        }
+    }
 
-        if (board.isRepetition()) {
+    if (board.isRepetition()) {
         return 0;
-        }
+    }
 
-        int stand_pat = score(board);
-        if (stand_pat >= beta) {
-        return beta;
-        }
-        if (stand_pat > alpha) {
+    int stand_pat = score(board);
+    int best_value = stand_pat;
+
+    if (stand_pat >= beta) {
+        return stand_pat;
+    }
+    if (alpha < stand_pat) {
         alpha = stand_pat;
-        }
+    }
 
-        Movelist moves;
-        movegen::legalmoves(moves, board);
+    Movelist moves;
+    movegen::legalmoves(moves, board);
 
-        for (const auto& move : moves) {
+    for (const auto& move : moves) {
         if (board.isCapture(move)) {
             board.makeMove(move);
             int score = -quisce(board, -beta, -alpha, start_time, max_time);
             board.unmakeMove(move);
 
             if (score >= beta) {
-                return beta;
+                return score;
+            }
+            if (score > best_value) {
+                best_value = score;
             }
             if (score > alpha) {
                 alpha = score;
             }
         }
-        }
+    }
 
-        return alpha;
+    return best_value;  
 }
+
 
 
 
@@ -224,6 +225,10 @@ int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<s
         return quisce(board, alpha, beta,start_time,max_time);
     }
 
+    // if (ply == 0){
+    //     return score(board);
+    // }
+
     if (board.isRepetition()) {
         return 0;
     }
@@ -237,14 +242,10 @@ int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<s
             return 0;
         }
     }
-
-    // if (ply ==0){
-    //     return quisce(board, alpha, beta, ply,start_time,max_time);
-    // }
     
 
     int score = 0;
-    int best_value = -1000;
+    int best_value = -100000;
 
     if (ply>=3 && !board.inCheck()){
         board.makeNullMove();
@@ -262,7 +263,7 @@ int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<s
         score = -negamax(board, -beta, -alpha, ply - 1,start_time,max_time);
         board.unmakeMove(move);
         if (score >= beta) {
-            return beta;
+            return score;
         }
         if (score > best_value) {
             best_value = score;
@@ -290,10 +291,10 @@ chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, i
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int ply = 1; ply <= MAX_DEPTH; ++ply) {
-        int alpha = -1000;
-        int beta = 1000;
+        int alpha = -100000;
+        int beta = 100000;
         int score = 0;
-        int best_value = -1000;
+        int best_value = -100000;
 
         lastDepth = ply;
         auto current_time = std::chrono::high_resolution_clock::now();
