@@ -1,0 +1,34 @@
+[Event "*"]
+[Site "*"]
+[Date "2025.04.29"]
+[Time "23:18:42"]
+[Round "*"]
+[White "NoisyBoyW"]
+[Black "hm::Human"]
+[Result "1-0"]
+[Termination "mate"]
+[ECO "D31"]
+[Opening "QGD"]
+[TimeControl "40/300+1"]
+[PlyCount "69"]
+
+1.d4 d5 2.c4 e6
+3.Nc3 dxc4 {D31: QGD, 3.Nc3}  4.e4 Nf6
+5.Bxc4 Bd6 6.e5 O-O
+7.exf6 Qxf6 8.Be3 b6
+9.Qf3 Qxf3 10.Nxf3 Bb7
+11.O-O Bxf3 12.gxf3 c5
+13.dxc5 Bxc5 14.Bxc5 bxc5
+15.f4 Nc6 16.Ne4 Nd4
+17.Nxc5 Rac8 18.b4 a5
+19.a3 axb4 20.axb4 Nf3+
+21.Kh1 Nd2 22.Rfc1 Nxc4
+23.Rxc4 Rfd8 24.Re1 Rd2
+25.Kg1 Rb2 26.Rd4 Rb8
+27.Rdd1 R2xb4 28.Na6 R4b6
+29.Nxb8 Rxb8 30.Rd7 Kf8
+31.Rc1 Ke8 32.Rcc7 Rd8
+33.Rxf7 Rd1+ 34.Kg2 Rd8
+35.Rce7# 1-0
+
+

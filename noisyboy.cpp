@@ -252,7 +252,7 @@ int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<s
         board.unmakeNullMove();
 
         if (score >= beta) {
-            return score;
+            return beta;
         }
     };
 
@@ -304,7 +304,7 @@ chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, i
         if (ply == 1) {
             for (const auto& move : moves) {
                 board.makeMove(move);
-                score = -negamax(board, -beta, -alpha, ply - 1,start,max_time);
+                score = negamax(board, alpha, beta, ply - 1,start,max_time);
                 board.unmakeMove(move);
 
                 if (score > best_value) {
