@@ -145,6 +145,21 @@ inline const char* getKey(const PieceInfo &info, Color side) {
     return (side == Color::WHITE) ? info.whiteKey : info.blackKey;
 }
 
+inline bool is_endgame(Board &board) {
+    int queens = 0;
+    int minors = 0;
+    queens += board.pieces(PieceType::QUEEN).count();
+    minors += board.pieces(PieceType::KNIGHT).count();
+    minors += board.pieces(PieceType::BISHOP).count();
+
+    if (queens == 0 || (queens <= 2 && minors<=1)){
+        return true;
+    }
+
+    return false;
+}
+
+
 int score(Board &board) {
     int score = 0;
     Color us = board.sideToMove();
@@ -158,8 +173,14 @@ int score(Board &board) {
         score -= PieceSquares(board.pieces(info.type, them), getKey(info, them));
     }
 
-    score += PieceSquares(board.pieces(PieceType::KING, us), us == Color::WHITE ? "k" : "K");
-    score -= PieceSquares(board.pieces(PieceType::KING, them), them == Color::WHITE ? "k" : "K");
+    if (is_endgame(board)){
+        score += PieceSquares(board.pieces(PieceType::KING, us), us == Color::WHITE ? "k_end" : "K_END");
+        score -= PieceSquares(board.pieces(PieceType::KING, them), them == Color::WHITE ? "k_end" : "K_END");
+    }
+    else {
+        score += PieceSquares(board.pieces(PieceType::KING, us), us == Color::WHITE ? "k_open" : "K_OPEN");
+        score -= PieceSquares(board.pieces(PieceType::KING, them), them == Color::WHITE ? "k_open" : "K_OPEN");
+    }
 
     return score;
 }
@@ -246,7 +267,7 @@ int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<s
     int score = 0;
     int best_value = -1000;
 
-    if (ply>=3 && !board.inCheck()){
+    if (ply>=3 && !board.inCheck() && !is_endgame(board)){
         board.makeNullMove();
         score = -negamax(board, -beta, -beta+1, ply - 3,start_time,max_time);
         board.unmakeNullMove();
