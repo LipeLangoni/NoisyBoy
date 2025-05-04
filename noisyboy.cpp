@@ -8,9 +8,13 @@
 #include <string>
 
 using namespace chess;
-const int MAX_DEPTH = 10;
+const int MAX_DEPTH = 20;
+const int MATE_VALUE = 10000;
+
 inline std::vector<int> mirrorTable(const std::vector<int>& original) {
-    assert(original.size() == 64 && "mirrorTable() error: input vector size != 64");
+    if (original.size() != 64) {
+        throw std::invalid_argument("mirrorTable() error: input vector size != 64");
+    }
     std::vector<int> mirrored(64);
     for (int row = 0; row < 8; ++row) {
         for (int col = 0; col < 8; ++col) {
@@ -107,21 +111,20 @@ struct PieceTable {
     }
 };
 
-
-int PieceSquares(Bitboard piece, const std::string &type) {
+int pieceSquaresVal(Bitboard piece, const std::string &type) {
     int score = 0;
     static const PieceTable pieceTable;
+
     auto it = pieceTable.tables.find(type);
-    if (it == pieceTable.tables.end() || it->second.size() != 64) {
-        std::cerr << "Invalid piece type: " << type << "\n";
-        return score;
+    if (it == pieceTable.tables.end()) {
+        throw std::invalid_argument("Invalid piece type: " + type);
     }
     
     const std::vector<int>& table = it->second;
-    for (int square = 0; square < 64; ++square) {
-        if ((piece >> square) & 1ULL) {
-            score += table[square];
-        }
+
+    for (Bitboard bb = piece; bb; bb &= (bb.getBits() - 1)) {
+        int square = __builtin_ctzll(bb.getBits());
+        score += table[square];
     }
     return score;
 }
@@ -131,6 +134,13 @@ struct PieceInfo {
     int materialValue;
     const char* whiteKey;  
     const char* blackKey;
+};
+
+struct SearchInfo {
+    std::vector<Move> pv;
+    long long nodes;
+    std::chrono::time_point<std::chrono::high_resolution_clock> max_time;
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
 };
 
 static constexpr std::array<PieceInfo, 5> pieceInfos{{
@@ -146,203 +156,223 @@ inline const char* getKey(const PieceInfo &info, Color side) {
 }
 
 int score(Board &board) {
-    int score = 0;
+    int totalScore = 0;
+
     Color us = board.sideToMove();
     Color them = ~us;
+
     for (const auto &info : pieceInfos) {
-        int sideCount = board.pieces(info.type, us).count();
-        int opponentCount = board.pieces(info.type, them).count();
-        score += sideCount * info.materialValue;
-        score -= opponentCount * info.materialValue;
-        score += PieceSquares(board.pieces(info.type, us), getKey(info, us));
-        score -= PieceSquares(board.pieces(info.type, them), getKey(info, them));
+        auto ourPieces = board.pieces(info.type, us);
+        auto theirPieces = board.pieces(info.type, them);
+
+        int ourPieceCount = ourPieces.count();
+        int theirPieceCount = theirPieces.count();
+        totalScore += ourPieceCount * info.materialValue;
+        totalScore -= theirPieceCount * info.materialValue;
+
+        totalScore += pieceSquaresVal(ourPieces, getKey(info, us));
+        totalScore -= pieceSquaresVal(theirPieces, getKey(info, them));
     }
 
-    score += PieceSquares(board.pieces(PieceType::KING, us), us == Color::WHITE ? "k" : "K");
-    score -= PieceSquares(board.pieces(PieceType::KING, them), them == Color::WHITE ? "k" : "K");
+    auto ourKing = board.pieces(PieceType::KING, us);
+    auto theirKing = board.pieces(PieceType::KING, them);
+    totalScore += pieceSquaresVal(ourKing, getKey({PieceType::KING, 0, "k", "K"}, us));
+    totalScore -= pieceSquaresVal(theirKing, getKey({PieceType::KING, 0, "k", "K"}, them));
 
-    return score;
+    return totalScore;
 }
+
 struct SearchTimeoutException : public std::exception {
     const char* what() const noexcept override {
         return "Search timeout";
     }
 };
 
-int quisce(Board &board, int alpha, int beta, 
-    std::chrono::time_point<std::chrono::high_resolution_clock> start_time,
-    std::chrono::milliseconds max_time)
-        {
-        auto current_time = std::chrono::high_resolution_clock::now();
-        if (current_time - start_time > max_time) {
-        return 0;
-        }
+bool is_null_move_allowed(const Board &board) {
+    Color sideToMove = board.sideToMove();
 
-        if (board.isRepetition()) {
-        return 0;
-        }
+    Bitboard kingBitboard = board.pieces(PieceType::KING, sideToMove);
+    Bitboard pawnBitboard = board.pieces(PieceType::PAWN, sideToMove);
+    Bitboard allPiecesBitboard = board.us(sideToMove);
 
-        int stand_pat = score(board);
-        if (stand_pat >= beta) {
-        return beta;
-        }
-        if (stand_pat > alpha) {
-        alpha = stand_pat;
-        }
+    if ((kingBitboard | pawnBitboard) == allPiecesBitboard) {
+        return false;
+    }
 
-        Movelist moves;
-        movegen::legalmoves(moves, board);
+    int totalPieces = board.all().count();
 
-        for (const auto& move : moves) {
-        if (board.isCapture(move)) {
-            board.makeMove(move);
-            int score = -quisce(board, -beta, -alpha, start_time, max_time);
-            board.unmakeMove(move);
-
-            if (score >= beta) {
-                return beta;
-            }
-            if (score > alpha) {
-                alpha = score;
-            }
-        }
-        }
-
-        return alpha;
+    return totalPieces > 6;
 }
 
+bool should_stop(SearchInfo &info) {
+    auto current_time = std::chrono::high_resolution_clock::now();
+    return current_time > info.max_time;
+}
 
+std::chrono::milliseconds get_duration(std::chrono::time_point<std::chrono::high_resolution_clock> start) {
+    auto current_time = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start);
+}
 
-int negamax(Board &board, int alpha, int beta, int ply,std::chrono::time_point<std::chrono::high_resolution_clock>start_time,std::chrono::milliseconds max_time)
+int quisce(
+    Board &board, 
+    int alpha, 
+    int beta, 
+    int ply,
+    SearchInfo &info
+)
 {
-    
-    auto now = std::chrono::high_resolution_clock::now();
-    if (now - start_time > max_time) {
+    if (should_stop(info)) {
         return 0;
-    }
-    if (ply == 0){
-        return quisce(board, alpha, beta,start_time,max_time);
     }
 
     if (board.isRepetition()) {
         return 0;
     }
-    Movelist moves;
-    movegen::legalmoves(moves, board); 
-    
-    if (moves.size() == 0) {
-        if (board.inCheck()) {
-            return -10000 + ply;
-        } else {
-            return 0;
-        }
+
+    info.nodes++;
+
+    int best = score(board);
+    if (best >= beta) {
+        return best;
     }
 
-    // if (ply ==0){
-    //     return quisce(board, alpha, beta, ply,start_time,max_time);
-    // }
+    if (best > alpha) {
+        alpha = best;
+    }
+
+    Movelist moves;
+    movegen::legalmoves(moves, board);
+
+    for (const auto& move : moves) {
+        if (!board.isCapture(move)) {
+            continue;
+        }
     
+        board.makeMove(move);
+        int score = -quisce(board, -beta, -alpha, ply + 1, info);
+        board.unmakeMove(move);
 
-    int score = 0;
-    int best_value = -1000;
+        if (score >= beta) {
+            return score;
+        }
+        if (score > best) {
+            best = score;
+            if (score > alpha) {
+                alpha = score;
+                info.pv[ply] = move;
+            }
+        }        
+    }
 
-    if (ply>=3 && !board.inCheck()){
+    return best;
+}
+
+int negamax(
+    Board &board, 
+    int alpha, 
+    int beta,
+    int depth, 
+    int ply, 
+    SearchInfo &info
+)
+{
+    if (depth <= 0) {
+        return quisce(board, alpha, beta, ply, info);
+    }
+
+    if (should_stop(info)) {
+        return 0;
+    }
+
+    if (board.isRepetition() && ply > 0) {
+        return 0;
+    }
+    
+    info.nodes++;
+
+    Movelist moves;
+    movegen::legalmoves(moves, board); 
+
+    if (moves.empty()) {
+        return board.inCheck() ? -MATE_VALUE + ply : 0;
+    }
+
+    if (depth > 3 
+        && !board.inCheck() 
+        && is_null_move_allowed(board)
+        && (beta - score(board) > 200)
+    ){
         board.makeNullMove();
-        score = -negamax(board, -beta, -beta+1, ply - 3,start_time,max_time);
+        int score = -negamax(board, -beta, -beta + 1, depth - 3, ply + 1, info);
         board.unmakeNullMove();
 
         if (score >= beta) {
-            return beta;
+            return score;
         }
     };
 
-    
+    int best_value = -MATE_VALUE;
+
     for (const auto& move : moves) {
         board.makeMove(move);
-        score = -negamax(board, -beta, -alpha, ply - 1,start_time,max_time);
+        int score = -negamax(board, -beta, -alpha, depth - 1, ply + 1, info);
         board.unmakeMove(move);
         if (score >= beta) {
-            return beta;
+            return score;
         }
         if (score > best_value) {
             best_value = score;
-        }
-        if (score > alpha) {
-            alpha = score;
+            if (score > alpha) {
+                alpha = score;
+                info.pv[ply] = move;
+            }
         }
     }
 
     return best_value;
 }
-chess::Move noisy_boy(Board &board,int wtime = 0, int btime = 0, int winc = 0, int binc = 0) {
-    
-    Move best_move;
-    
-    Movelist moves;
-    movegen::legalmoves(moves, board);
-    std::unordered_map<int, std::vector<std::tuple<chess::Move, int>>> pv_table;
 
-    auto tms = (board.sideToMove()==Color::WHITE ? wtime : btime);
-    auto inc = (board.sideToMove()==Color::WHITE ? winc  : binc);
-    std::chrono::milliseconds max_time = 
-    std::chrono::milliseconds(tms / 40) + std::chrono::milliseconds(inc / 2);
-    int lastDepth = 0;
+chess::Move noisy_boy(Board &board, int wtime = 0, int btime = 0, int winc = 0, int binc = 0) {
+    Move best_move;
+    SearchInfo info = SearchInfo();
+    info.nodes = 0;
+    info.pv.resize(MAX_DEPTH);
+
+    auto time_remaining = (board.sideToMove() == Color::WHITE) ? wtime : btime;
+    auto increment = (board.sideToMove() == Color::WHITE) ? winc : binc;
+
     auto start = std::chrono::high_resolution_clock::now();
 
-    for (int ply = 1; ply <= MAX_DEPTH; ++ply) {
-        int alpha = -1000;
-        int beta = 1000;
-        int score = 0;
-        int best_value = -1000;
+    info.max_time = start +
+        std::chrono::milliseconds(time_remaining / 40) + std::chrono::milliseconds(increment / 2);
 
-        lastDepth = ply;
+    for (int depth = 1; depth < MAX_DEPTH; depth++) {
+        int alpha = -MATE_VALUE;
+        int beta = MATE_VALUE;
+        int best_value = -MATE_VALUE;
+
+        int score = negamax(board, alpha, beta, depth, 0, info);
+        auto duration = get_duration(start);
         auto current_time = std::chrono::high_resolution_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start).count() > max_time.count()) {
-            return best_move;
-        }
-        std::vector<std::tuple<Move, int>> sorted_moves;
-        if (ply == 1) {
-            for (const auto& move : moves) {
-                board.makeMove(move);
-                score = negamax(board, alpha, beta, ply - 1,start,max_time);
-                board.unmakeMove(move);
+        if (current_time > info.max_time) {
+            break;
+        }  
 
-                if (score > best_value) {
-                    best_value = score;
-                    best_move = move;
-                }
-                sorted_moves.emplace_back(move, score);
-            }
-            std::sort(sorted_moves.begin(), sorted_moves.end(),
-            [](const std::tuple<Move, int>& a, const std::tuple<Move, int>& b) {
-                return std::get<1>(a) > std::get<1>(b);
-            });
-            pv_table[ply] = sorted_moves;
-        } else {
-            for (auto& move_tuple : pv_table[ply-1]) {
-                board.makeMove(std::get<0>(move_tuple));
-                score = -negamax(board, -beta, -alpha, ply - 1,start,max_time);
-                board.unmakeMove(std::get<0>(move_tuple));
+        auto nps = info.nodes / (get_duration(start).count() + 1);
+        std::string pvLine = uci::moveToUci(best_move);
 
-                if (score > best_value) {
-                    best_value = score;
-                    best_move = std::get<0>(move_tuple);
-                }
-                sorted_moves.emplace_back(std::get<0>(move_tuple), score);
-            }
-            std::sort(sorted_moves.begin(), sorted_moves.end(),
-            [](const std::tuple<Move, int>& a, const std::tuple<Move, int>& b) {
-                return std::get<1>(a) > std::get<1>(b);
-            });
-            pv_table[ply] = sorted_moves;
-            
+        std::cout << "info depth " << depth << " score cp " << score << " time " << duration.count() 
+        << " nodes" << info.nodes << " nps " <<  nps << " pv " << pvLine << std::endl;
+
+        if (score > best_value) {
+            best_move = info.pv[0];
+            best_value = score;   
         }
     }
 
-
     return best_move;
 }
-  
 
 void uci_commands(Board &board, const std::string &message) {
     std::string msg = message;
@@ -360,7 +390,7 @@ void uci_commands(Board &board, const std::string &message) {
     }
 
     if (msg == "uci") {
-        std::cout << "id name NoisyBoy" << std::endl;
+        std::cout << "id name NoisyBoy 0.1.1" << std::endl;
         std::cout << "id author Felipe Langoni Ramos" << std::endl;
         std::cout << "uciok" << std::endl;
         return;
@@ -449,8 +479,8 @@ void uci_commands(Board &board, const std::string &message) {
         
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
         
-        std::cout << "bestmove " << uci::moveToUci(best_move)
-                  << " (calc time " << duration << "s)" << std::endl;
+        std::cout << "bestmove " << uci::moveToUci(best_move)  << std::endl;
+        std::cout << " (calc time " << duration << "s)" << std::endl;
     }
     if (msg.substr(0, 4) == "eval") {
         auto start = std::chrono::high_resolution_clock::now();
