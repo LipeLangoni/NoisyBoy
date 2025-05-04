@@ -222,6 +222,8 @@ int quisce(
     SearchInfo &info
 )
 {
+    info.nodes++;
+
     if (should_stop(info)) {
         return 0;
     }
@@ -229,8 +231,6 @@ int quisce(
     if (board.isRepetition()) {
         return 0;
     }
-
-    info.nodes++;
 
     int best = score(board);
     if (best >= beta) {
@@ -252,7 +252,10 @@ int quisce(
         board.makeMove(move);
         int score = -quisce(board, -beta, -alpha, ply + 1, info);
         board.unmakeMove(move);
-
+        
+        if (should_stop(info)) {
+            return 0;
+        }
         if (score >= beta) {
             return score;
         }
@@ -277,19 +280,19 @@ int negamax(
     SearchInfo &info
 )
 {
-    if (depth <= 0) {
-        return quisce(board, alpha, beta, ply, info);
-    }
-
     if (should_stop(info)) {
         return 0;
     }
 
+    if (depth <= 0) {
+        return quisce(board, alpha, beta, ply, info);
+    }
+
+    info.nodes++;
+
     if (board.isRepetition() && ply > 0) {
         return 0;
     }
-    
-    info.nodes++;
 
     Movelist moves;
     movegen::legalmoves(moves, board); 
@@ -318,6 +321,10 @@ int negamax(
         board.makeMove(move);
         int score = -negamax(board, -beta, -alpha, depth - 1, ply + 1, info);
         board.unmakeMove(move);
+
+        if (should_stop(info)) {
+            return 0;
+        }
         if (score >= beta) {
             return score;
         }
