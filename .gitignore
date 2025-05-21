@@ -1,0 +1,63 @@
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Build directories
+build/
+cmake-build-*/
+
+# Compiled object files
+*.o
+*.obj
+*.lo
+*.slo
+
+# Compiled static libraries
+*.a
+*.lib
+
+# Compiled dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Executable files
+*.exe
+*.out
+*.app
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Debug files
+*.pch
+*.pdb
+*.ilk
+*.idb
+*.DS_Store
+
+# Coverage
+*.gcnoi
+*.gcda
+*.gcov
+
+# Generated files
+*.generated.*
+noisyboy
+noisyboy-1
+
+# Other IDEs
+.idea/
+*.iml
+
+# System files
+Thumbs.db
+ehthumbs.db
+.DS_Store
